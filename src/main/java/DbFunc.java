@@ -10,7 +10,7 @@ import java.util.Map;
 public class DbFunc {
     private final Connection conn;
     public DbFunc(){
-        Dotenv dotenv = Dotenv.configure().load();
+        Dotenv dotenv = Dotenv.load();
         conn = ConnectToDb(dotenv.get("DBNAME"), dotenv.get("POSTGRE_USERNAME"), dotenv.get("POSTGRE_PASSWORD") );
     }
     public Connection ConnectToDb(String dbname, String username, String password) {
@@ -430,6 +430,7 @@ public class DbFunc {
         }
         return res;
     }
+
 
 
 

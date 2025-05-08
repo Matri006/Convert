@@ -33,9 +33,14 @@ public class Notifier {
 
             SendMessage msg = new SendMessage();
             msg.setChatId(entry.getKey());
-
-            if(!entry.getValue().isEmpty()) msg.setText("Ваши избранные валюты " + entry.getValue());
-
+            String res = "";
+            if(!entry.getValue().isEmpty()) {
+                res += "\uD83D\uDCCA Новые курсы на сегодня \uD83D\uDD04\uD83D\uDCB1\n";
+                for(String s: entry.getValue().split(" ")){
+                    res += s + "    " + dbFunc.getCurr(s) + "\n";
+                }
+                msg.setText(res);
+            }
             try {
                 bot.execute(msg);
             } catch (Exception e) {

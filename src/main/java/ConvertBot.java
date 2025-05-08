@@ -7,6 +7,7 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -22,15 +23,16 @@ public class ConvertBot extends TelegramLongPollingBot {
     private final DbFunc db;
 
     public ConvertBot(){
-        db = new DbFunc();
-        Dotenv dotenv = Dotenv.configure().load();
+        Dotenv dotenv = Dotenv.load();
         this.botToken = dotenv.get("TELEGRAM_BOT_TOKEN");
         this.botUsername = dotenv.get("TELEGRAM_USERNAME");
+        db = new DbFunc();
+
 
         CreateCommands();
         new Thread(() -> {
             try {
-              new DailyCurrencyUpdater(db).updateTask();
+              //new DailyCurrencyUpdater(db).updateTask();
                 DailyCurrencyUpdater updater = new DailyCurrencyUpdater(db);
                 updater.startDailyUpdate();
 
@@ -69,22 +71,27 @@ public class ConvertBot extends TelegramLongPollingBot {
 
                     switch (command) {
                         case "/start":
+                            response.setReplyMarkup(hideKeyboard());
                             response.setText("Здравствуйте, используйте команды из меню для работы с ботом");
+
                             registerUser(message);
                             break;
                         case "/list":
+                            response.setReplyMarkup(hideKeyboard());
                             response.setText("Список доступных валют: \n" + getRates());
                             break;
 
                         case "/help":
+                            response.setReplyMarkup(hideKeyboard());
                             response.setText("Для работы с ботом используйте команды из меню команд");
                             break;
                         case "/subscribe":
-
+                            response.setReplyMarkup(hideKeyboard());
                             subscribeUser(message);
                             response.setText("Вы подписаны на ежедневные обновления!\n Для получения ежедневных обновлений о курсах валют добавьте валюты в избранные");
                             break;
                         case "/unsubscribe":
+                            response.setReplyMarkup(hideKeyboard());
                             unsubscribeUser(message);
                             response.setText("Вы отписаны от ежедневных обновлений!");
                             break;
@@ -108,18 +115,22 @@ public class ConvertBot extends TelegramLongPollingBot {
                             } else response.setText("Подпишитесь для добавления валют в избранные");
                             break;
                         case "/delete":
-                            if(isFavorEmpty(message)) response.setText("У вас нет избранных валют");
-                            else {
-                                response.setText("Выберите валюту");
-                                response.setReplyMarkup(delRowKeyBoard(message));
-                                db.setDelState(chatId, true);
-                            }
+                            if(db.isSubscribe(chatId)) {
+                                if (isFavorEmpty(message)) response.setText("У вас нет избранных валют");
+                                else {
+                                    response.setText("Выберите валюту");
+                                    response.setReplyMarkup(delRowKeyBoard(message));
+                                    db.setDelState(chatId, true);
+                                }
+                            } else response.setText("подпишитесь для просмотра избранных валют");
 
                             break;
                         case "/favorite":
+                            response.setReplyMarkup(hideKeyboard());
                             response.setText(getFavor(message));
                             break;
                         case "/status":
+                            response.setReplyMarkup(hideKeyboard());
                             if(db.isSubscribe(chatId)) response.setText("Вы подписаны на ежедневные обновления!");
                             else response.setText("Вы не подписаны на ежедневные обновления!");
                             break;
@@ -162,6 +173,7 @@ public class ConvertBot extends TelegramLongPollingBot {
                             if (isValidCurr(userMessage)) {
                                 db.setToCurrency(chatId, userMessage.toUpperCase());
                                 db.setConvStep(chatId, 3);
+                                response.setReplyMarkup(hideKeyboard());
                                 response.setText("Введите сумму для конвертации:");
                             } else {
                                 response.setText("Неверная валюта. Попробуйте снова.");
@@ -179,6 +191,7 @@ public class ConvertBot extends TelegramLongPollingBot {
 
                                 db.clearConvState(chatId);
                                 db.setConvertState(chatId, false);
+
                             } catch (NumberFormatException e) {
                                 response.setText("Введите корректную сумму (например, 123.45)");
                             }
@@ -187,6 +200,7 @@ public class ConvertBot extends TelegramLongPollingBot {
                             response.setText("Что-то пошло не так. Конвертация сброшена. Попробуйте снова с команды /convert.");
                             db.clearConvState(chatId);
                             db.setConvertState(chatId, false);
+                            response.setReplyMarkup(hideKeyboard());
                             break;
                     }
                 }
@@ -265,21 +279,27 @@ public class ConvertBot extends TelegramLongPollingBot {
     }
     private String getFavor(Message message){
         Long id = message.getFrom().getId();
+        String s = "";
+        if(db.isSubscribe(id)) {
+            Map<Long, String> data = db.getUsersWithFavorite();
+            for (Map.Entry<Long, String> entry : data.entrySet()) {
+                if (id.equals(entry.getKey())) {
+                    if (entry.getValue().isEmpty()) {
+                        s =  "Ничего не нашлось(";
+                        break;
+                    }
+                    else {
 
-        Map<Long, String> data = db.getUsersWithFavorite();
-        for(Map.Entry<Long, String> entry: data.entrySet()){
-            if(id.equals(entry.getKey())) {
-                if(entry.getValue().isEmpty()) return "Ничего не нашлось(";
-                 else{
-                     String s = "";
-                     s += "Ваши избранные валюты\n";
-                     for(String curr: entry.getValue().split(" ")){
-                         s += curr + "\n";
-                     }
+                        s += "Ваши избранные валюты\n";
+                        for (String curr : entry.getValue().split(" ")) {
+                            s += curr + "\n";
+                        }
+                    }
                 }
             }
-        }
-        return "Подпишитесь, что бы выбирать избранные валюты";
+            return s;
+
+        } else return "Подпишитесь, что бы выбирать избранные валюты";
     }
     private void addFavor(Message message){
         Long userId = message.getFrom().getId();
@@ -349,6 +369,11 @@ public class ConvertBot extends TelegramLongPollingBot {
         sum = sum * count_a;
         double count_b = db.getCurr(b);
         return (double)(sum /count_b);
+    }
+    private ReplyKeyboardRemove hideKeyboard(){
+        ReplyKeyboardRemove keyboardRemove = new ReplyKeyboardRemove();
+        keyboardRemove.setRemoveKeyboard(true);
+        return keyboardRemove;
     }
 
 
